@@ -1,24 +1,22 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
   Bell,
   ChartCandlestick,
-  ChevronDown,
   CircleHelp,
   Clock3,
   Crosshair,
   Code2,
   ExternalLink,
   LayoutDashboard,
-  Menu,
   Search,
   Settings2,
   ShieldCheck,
   SlidersHorizontal,
   TrendingDown,
   TrendingUp,
-  WalletCards,
   X,
+  Trash2,
 } from 'lucide-react';
 
 type Side = 'BUY' | 'SELL' | 'WAIT';
@@ -41,181 +39,32 @@ type Pair = {
   liveCross?: 'BUY' | 'SELL';
   liveCrossAt?: number;
 };
+type Candle = { t: number; h: number; l: number; c: number };
+type PlanData = { atr: number; buyCross?: number; sellCross?: number };
+
+const MAX_CRYPTO_PAIRS = 20;
+
 const seedPairs: Pair[] = [
-  {
-    symbol: 'BINANCE:BTCUSDT',
-    name: 'Bitcoin',
-    category: 'Crypto',
-    price: '67,482.10',
-    change: '+1.82%',
-    positive: true,
-    rsi: 57.8,
-    fast: 67440,
-    slow: 67390,
-    timeframe: '15m',
-    updated: 'Just now',
-  },
-  {
-    symbol: 'BINANCE:ETHUSDT',
-    name: 'Ethereum',
-    category: 'Crypto',
-    price: '2,614.72',
-    change: '+0.94%',
-    positive: true,
-    rsi: 53.2,
-    fast: 2615,
-    slow: 2617,
-    timeframe: '15m',
-    updated: 'Just now',
-  },
-  {
-    symbol: 'BINANCE:SOLUSDT',
-    name: 'Solana',
-    category: 'Crypto',
-    price: '148.26',
-    change: '-0.62%',
-    positive: false,
-    rsi: 46.1,
-    fast: 148.2,
-    slow: 148.5,
-    timeframe: '15m',
-    updated: 'Just now',
-  },
-  {
-    symbol: 'BINANCE:XRPUSDT',
-    name: 'XRP',
-    category: 'Crypto',
-    price: '0.5842',
-    change: '+2.17%',
-    positive: true,
-    rsi: 61.3,
-    fast: 0.584,
-    slow: 0.581,
-    timeframe: '15m',
-    updated: 'Just now',
-  },
-  {
-    symbol: 'BINANCE:BNBUSDT',
-    name: 'BNB',
-    category: 'Crypto',
-    price: '598.40',
-    change: '+0.31%',
-    positive: true,
-    rsi: 50.8,
-    fast: 598.2,
-    slow: 598.1,
-    timeframe: '15m',
-    updated: 'Just now',
-  },
-  {
-    symbol: 'BINANCE:DOGEUSDT',
-    name: 'Dogecoin',
-    category: 'Crypto',
-    price: '0.1638',
-    change: '-1.24%',
-    positive: false,
-    rsi: 39.4,
-    fast: 0.163,
-    slow: 0.165,
-    timeframe: '15m',
-    updated: 'Just now',
-  },
-  {
-    symbol: 'OANDA:EURUSD',
-    name: 'EUR/USD',
-    category: 'Forex',
-    price: '1.08462',
-    change: '+0.14%',
-    positive: true,
-    rsi: 54.6,
-    fast: 1.0847,
-    slow: 1.0845,
-    timeframe: '15m',
-    updated: 'Just now',
-  },
-  {
-    symbol: 'OANDA:GBPUSD',
-    name: 'GBP/USD',
-    category: 'Forex',
-    price: '1.26714',
-    change: '-0.22%',
-    positive: false,
-    rsi: 44.8,
-    fast: 1.267,
-    slow: 1.268,
-    timeframe: '15m',
-    updated: 'Just now',
-  },
-  {
-    symbol: 'OANDA:USDJPY',
-    name: 'USD/JPY',
-    category: 'Forex',
-    price: '149.825',
-    change: '+0.08%',
-    positive: true,
-    rsi: 51.6,
-    fast: 149.83,
-    slow: 149.81,
-    timeframe: '15m',
-    updated: 'Just now',
-  },
-  {
-    symbol: 'OANDA:XAUUSD',
-    name: 'Gold',
-    category: 'Metals',
-    price: '2,658.40',
-    change: '+0.56%',
-    positive: true,
-    rsi: 58.2,
-    fast: 2658.5,
-    slow: 2657.8,
-    timeframe: '15m',
-    updated: 'Just now',
-  },
-  {
-    symbol: 'OANDA:NAS100USD',
-    name: 'Nasdaq 100',
-    category: 'Indices',
-    price: '20,214.8',
-    change: '+0.42%',
-    positive: true,
-    rsi: 49.2,
-    fast: 20214,
-    slow: 20216,
-    timeframe: '15m',
-    updated: 'Just now',
-  },
-  {
-    symbol: 'OANDA:US30USD',
-    name: 'Dow Jones',
-    category: 'Indices',
-    price: '42,183.2',
-    change: '-0.17%',
-    positive: false,
-    rsi: 47.5,
-    fast: 42180,
-    slow: 42190,
-    timeframe: '15m',
-    updated: 'Just now',
-  },
+  { symbol: 'BINANCE:BTCUSDT', name: 'Bitcoin', category: 'Crypto', price: '67,482.10', change: '+1.82%', positive: true, rsi: 57.8, fast: 67440, slow: 67390, timeframe: '15m', updated: 'Just now' },
+  { symbol: 'BINANCE:ETHUSDT', name: 'Ethereum', category: 'Crypto', price: '2,614.72', change: '+0.94%', positive: true, rsi: 53.2, fast: 2615, slow: 2617, timeframe: '15m', updated: 'Just now' },
+  { symbol: 'BINANCE:SOLUSDT', name: 'Solana', category: 'Crypto', price: '148.26', change: '-0.62%', positive: false, rsi: 46.1, fast: 148.2, slow: 148.5, timeframe: '15m', updated: 'Just now' },
+  { symbol: 'BINANCE:XRPUSDT', name: 'XRP', category: 'Crypto', price: '0.5842', change: '+2.17%', positive: true, rsi: 61.3, fast: 0.584, slow: 0.581, timeframe: '15m', updated: 'Just now' },
+  { symbol: 'BINANCE:BNBUSDT', name: 'BNB', category: 'Crypto', price: '598.40', change: '+0.31%', positive: true, rsi: 50.8, fast: 598.2, slow: 598.1, timeframe: '15m', updated: 'Just now' },
+  { symbol: 'BINANCE:DOGEUSDT', name: 'Dogecoin', category: 'Crypto', price: '0.1638', change: '-1.24%', positive: false, rsi: 39.4, fast: 0.163, slow: 0.165, timeframe: '15m', updated: 'Just now' },
+  { symbol: 'OANDA:EURUSD', name: 'EUR/USD', category: 'Forex', price: '1.08462', change: '+0.14%', positive: true, rsi: 54.6, fast: 1.0847, slow: 1.0845, timeframe: '15m', updated: 'Just now' },
+  { symbol: 'OANDA:GBPUSD', name: 'GBP/USD', category: 'Forex', price: '1.26714', change: '-0.22%', positive: false, rsi: 44.8, fast: 1.267, slow: 1.268, timeframe: '15m', updated: 'Just now' },
+  { symbol: 'OANDA:USDJPY', name: 'USD/JPY', category: 'Forex', price: '149.825', change: '+0.08%', positive: true, rsi: 51.6, fast: 149.83, slow: 149.81, timeframe: '15m', updated: 'Just now' },
+  { symbol: 'OANDA:XAUUSD', name: 'Gold', category: 'Metals', price: '2,658.40', change: '+0.56%', positive: true, rsi: 58.2, fast: 2658.5, slow: 2657.8, timeframe: '15m', updated: 'Just now' },
+  { symbol: 'OANDA:NAS100USD', name: 'Nasdaq 100', category: 'Indices', price: '20,214.8', change: '+0.42%', positive: true, rsi: 49.2, fast: 20214, slow: 20216, timeframe: '15m', updated: 'Just now' },
+  { symbol: 'OANDA:US30USD', name: 'Dow Jones', category: 'Indices', price: '42,183.2', change: '-0.17%', positive: false, rsi: 47.5, fast: 42180, slow: 42190, timeframe: '15m', updated: 'Just now' },
 ];
 const tfs = ['1m', '5m', '15m', '30m', '1h', '4h', '1D'];
-const tvInterval: Record<string, string> = {
-  '1m': '1',
-  '5m': '5',
-  '15m': '15',
-  '30m': '30',
-  '1h': '60',
-  '4h': '240',
-  '1D': 'D',
-};
+const tvInterval: Record<string, string> = { '1m': '1', '5m': '5', '15m': '15', '30m': '30', '1h': '60', '4h': '240', '1D': 'D' };
+const binanceInterval: Record<string, string> = { '1m': '1m', '5m': '5m', '15m': '15m', '30m': '30m', '1h': '1h', '4h': '4h', '1D': '1d' };
+
 function getSignal(p: Pair, midline: number): Side {
   if (p.category !== 'Crypto' || !p.live) return 'WAIT';
-  return p.fast > p.slow && p.rsi > midline
-    ? 'BUY'
-    : p.fast < p.slow && p.rsi < midline
-      ? 'SELL'
-      : 'WAIT';
+  return p.fast > p.slow && p.rsi > midline ? 'BUY' : p.fast < p.slow && p.rsi < midline ? 'SELL' : 'WAIT';
 }
 function calculateEma(values: number[], period: number): number {
   if (!values.length) return 0;
@@ -224,15 +73,12 @@ function calculateEma(values: number[], period: number): number {
 }
 function calculateRsi(values: number[], period: number): number {
   if (values.length <= period) return 50;
-  let gain = 0;
-  let loss = 0;
+  let gain = 0, loss = 0;
   for (let i = 1; i <= period; i++) {
     const change = values[i] - values[i - 1];
-    if (change > 0) gain += change;
-    else loss -= change;
+    if (change > 0) gain += change; else loss -= change;
   }
-  let avgGain = gain / period;
-  let avgLoss = loss / period;
+  let avgGain = gain / period, avgLoss = loss / period;
   for (let i = period + 1; i < values.length; i++) {
     const change = values[i] - values[i - 1];
     avgGain = (avgGain * (period - 1) + Math.max(change, 0)) / period;
@@ -249,15 +95,6 @@ function calculateRsiSeries(values: number[], period: number): number[] {
   }
   return series;
 }
-const binanceInterval: Record<string, string> = {
-  '1m': '1m',
-  '5m': '5m',
-  '15m': '15m',
-  '30m': '30m',
-  '1h': '1h',
-  '4h': '4h',
-  '1D': '1d',
-};
 function analyze(closes: number[], rsiP: number, fastP: number, slowP: number): TfRow | null {
   if (closes.length < 51) return null;
   const prev = closes.slice(0, -1);
@@ -281,15 +118,12 @@ function evalRoadmap(p: Pair, midline: number) {
     d1Rsi: d1?.rsi,
     allGreen: green,
     allRed: red,
-    // Step 1: D1 extreme and all seven timeframe MA/RSI rows must align.
     sellArm: green && !!d1 && d1.rsi > 70,
     buyArm: red && !!d1 && d1.rsi < 30,
     sellConfirm: !!m15 && m15.prevFast >= m15.prevSlow && m15.fast < m15.slow && m15.rsi < midline,
     buyConfirm: !!m15 && m15.prevFast <= m15.prevSlow && m15.fast > m15.slow && m15.rsi > midline,
   };
 }
-type Candle = { t: number; h: number; l: number; c: number };
-type PlanData = { atr: number; buyCross?: number; sellCross?: number };
 function calculateAtr(candles: Candle[], period: number): number {
   if (candles.length <= period) return 0;
   const trueRange = (i: number) =>
@@ -326,6 +160,7 @@ function displayMarketPrice(value: number): string {
   const digits = value >= 1000 ? 2 : value >= 1 ? 4 : value >= 0.1 ? 5 : 7;
   return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: digits });
 }
+
 function App() {
   const [pairs, setPairs] = useState(seedPairs);
   const [selected, setSelected] = useState(seedPairs[0].symbol);
@@ -348,8 +183,20 @@ function App() {
   const [notice, setNotice] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
   const [momentumSeries, setMomentumSeries] = useState<Record<string, number[]>>({});
+  const [plans, setPlans] = useState<Record<string, PlanData>>({});
   const [showCryptoGridNote, setShowCryptoGridNote] = useState(false);
   const [showFeedStatusNote, setShowFeedStatusNote] = useState(false);
+  const [liveTopGainers, setLiveTopGainers] = useState<any[]>([]);
+  const [liveTopLosers, setLiveTopLosers] = useState<any[]>([]);
+  const [scanSource, setScanSource] = useState<'manual' | 'gainers' | 'losers' | 'both'>('manual');
+
+  const closesRef = useRef<Record<string, number[]>>({}); 
+  const lastCloseRef = useRef<Record<string, number>>({}); 
+  const candlesRef = useRef<Record<string, Candle[]>>({}); 
+  const pendingRef = useRef<Set<string>>(new Set()); 
+  const cfg = useRef({ rsiPeriod, fastLen, slowLen });
+  cfg.current = { rsiPeriod, fastLen, slowLen };
+
   const active = pairs.find(p => p.symbol === selected) ?? pairs[0];
   const activeMomentum = momentumSeries[active.symbol.split(':')[1]] ?? [];
   const momentumPoints = activeMomentum.map((value, index) => {
@@ -359,44 +206,149 @@ function App() {
   const activeRsi = activeMomentum.length ? activeMomentum[activeMomentum.length - 1] : active.rsi;
   const activeZone = activeRsi > midline ? 'BUY ZONE' : 'SELL ZONE';
   const metricPairs = pairs.filter(p => p.category === 'Crypto');
+  const cryptoKey = metricPairs.map(p => p.symbol.split(':')[1]).join(',');
+
+  const recompute = useCallback((symbol: string, crossAt?: number) => {
+    const { rsiPeriod: rp, fastLen: fl, slowLen: sl } = cfg.current;
+    const tf: Record<string, TfRow> = {};
+    tfs.forEach(label => {
+      const row = analyze(closesRef.current[symbol + '|' + label] ?? [], rp, fl, sl);
+      if (row) tf[label] = row;
+    });
+    const r15 = tf['15m'];
+    const closes15 = closesRef.current[symbol + '|15m'] ?? [];
+    if (closes15.length >= 51) {
+      setMomentumSeries(previous => ({ ...previous, [symbol]: calculateRsiSeries(closes15, rp) }));
+    }
+    const candles = candlesRef.current[symbol];
+    if (candles && candles.length >= 60) {
+      const crosses = findCrossLevels(candles.map(c => c.c), fl, sl);
+      setPlans(previous => ({ ...previous, ['BINANCE:' + symbol]: { atr: calculateAtr(candles, 14), ...crosses } }));
+    }
+    const cross: 'BUY' | 'SELL' | undefined = crossAt !== undefined && r15
+      ? r15.prevFast <= r15.prevSlow && r15.fast > r15.slow ? 'BUY' : r15.prevFast >= r15.prevSlow && r15.fast < r15.slow ? 'SELL' : undefined
+      : undefined;
+    setPairs(previous => previous.map(p => {
+      if (p.symbol !== 'BINANCE:' + symbol) return p;
+      return {
+        ...p,
+        tf,
+        live: tfs.every(label => tf[label] !== undefined),
+        ...(r15 ? { rsi: r15.rsi, fast: r15.fast, slow: r15.slow, timeframe: '15m', updated: 'Binance · candles' } : {}),
+        ...(cross ? { liveCross: cross, liveCrossAt: crossAt } : {}),
+      };
+    }));
+  }, []);
+
+  // Top gainers & losers stream
+  useEffect(() => {
+    let socket: WebSocket | null = null;
+    let reconnectTimer: number | undefined;
+    let disposed = false;
+    let dirty = false;
+    const tickerMap = new Map<string, any>();
+    
+    const publishTimer = window.setInterval(() => {
+      if (!dirty) return;
+      dirty = false;
+      const liquid = Array.from(tickerMap.values()).filter(t => parseFloat(t.q) > 1000000);
+      
+      setLiveTopGainers(
+        liquid.filter(t => parseFloat(t.P) > 0)
+          .sort((a, b) => parseFloat(b.P) - parseFloat(a.P))
+          .slice(0, 10)
+      );
+      
+      setLiveTopLosers(
+        liquid.filter(t => parseFloat(t.P) < 0)
+          .sort((a, b) => parseFloat(a.P) - parseFloat(b.P))
+          .slice(0, 10)
+      );
+    }, 1000);
+
+    const connect = () => {
+      if (disposed) return;
+      socket = new WebSocket('wss://data-stream.binance.vision/stream?streams=!ticker@arr');
+      socket.onmessage = event => {
+        try {
+          const packet = JSON.parse(String(event.data));
+          if (Array.isArray(packet.data)) {
+            packet.data.forEach((ticker: any) => {
+              if (ticker.s.endsWith('USDT')) tickerMap.set(ticker.s, ticker);
+            });
+            dirty = true;
+          }
+        } catch (error) {
+          console.warn('Could not parse Top Gainers/Losers stream', error);
+        }
+      };
+      socket.onclose = () => {
+        if (disposed) return;
+        reconnectTimer = window.setTimeout(connect, 5000);
+      };
+    };
+    connect();
+    return () => {
+      disposed = true;
+      window.clearInterval(publishTimer);
+      if (reconnectTimer !== undefined) window.clearTimeout(reconnectTimer);
+      if (socket) { socket.onclose = null; socket.close(); }
+    };
+  }, []);
+
+  // Main scanner engine
   useEffect(() => {
     let disposed = false;
     let socket: WebSocket | null = null;
     let reconnectTimer: number | undefined;
-    const cryptoPairs = seedPairs.filter(p => p.category === 'Crypto');
-    const candleHistory: Record<string, number[]> = {};
-    const updateCrypto = (symbol: string, update: Partial<Pair>) => {
-      if (disposed) return;
-      setPairs(previous => previous.map(pair => pair.symbol === 'BINANCE:' + symbol ? { ...pair, ...update } : pair));
-    };
-    const loadHistory = async () => {
-      await Promise.all(cryptoPairs.map(async pair => {
-        const symbol = pair.symbol.split(':')[1];
-        try {
-          const response = await fetch('https://data-api.binance.vision/api/v3/klines?symbol=' + symbol + '&interval=15m&limit=150');
-          if (!response.ok) throw new Error('Binance candles HTTP ' + response.status);
-          const rows: unknown[][] = await response.json();
-          const closes = rows.filter(row => Number(row[6]) < Date.now()).map(row => Number(row[4])).filter(Number.isFinite);
-          if (closes.length < 51) throw new Error('Not enough closed candles for ' + symbol);
-          candleHistory[symbol] = closes;
-          setMomentumSeries(previous => ({ ...previous, [symbol]: calculateRsiSeries(closes, rsiPeriod) }));
-          updateCrypto(symbol, { price: displayMarketPrice(closes[closes.length - 1]), rsi: calculateRsi(closes, rsiPeriod), fast: calculateEma(closes, fastLen), slow: calculateEma(closes, slowLen), timeframe: '15m', updated: 'Binance · live candles', live: true });
-        } catch (error) {
-          console.warn('Binance history unavailable for ' + symbol, error);
+    const symbols = cryptoKey.split(',').filter(Boolean);
+
+    symbols.forEach(symbol => recompute(symbol));
+
+    const fetchOne = async (symbol: string, label: string) => {
+      const key = symbol + '|' + label;
+      if (pendingRef.current.has(key)) return;
+      pendingRef.current.add(key);
+      try {
+        const limit = label === '15m' ? 300 : 200;
+        const response = await fetch('https://data-api.binance.vision/api/v3/klines?symbol=' + symbol + '&interval=' + binanceInterval[label] + '&limit=' + limit);
+        if (!response.ok) throw new Error('Binance candles HTTP ' + response.status);
+        const rows: unknown[][] = await response.json();
+        const closed = rows.filter(row => Number(row[6]) < Date.now());
+        closesRef.current[key] = closed.map(row => Number(row[4])).filter(Number.isFinite);
+        lastCloseRef.current[key] = Number(closed[closed.length - 1]?.[6] ?? 0);
+        if (label === '15m') {
+          candlesRef.current[symbol] = closed
+            .map(row => ({ t: Number(row[0]), h: Number(row[2]), l: Number(row[3]), c: Number(row[4]) }))
+            .filter(c => Number.isFinite(c.h) && Number.isFinite(c.l) && Number.isFinite(c.c));
         }
-      }));
+        recompute(symbol);
+      } catch (error) {
+        console.warn('Binance ' + label + ' history unavailable for ' + symbol, error);
+      } finally {
+        pendingRef.current.delete(key);
+      }
     };
+    
+    const loadMissing = async () => {
+      const jobs = symbols.flatMap(symbol => tfs.map(label => ({ symbol, label })))
+        .filter(({ symbol, label }) => closesRef.current[symbol + '|' + label] === undefined);
+      for (let i = 0; i < jobs.length; i += 10) {
+        if (disposed) return;
+        await Promise.all(jobs.slice(i, i + 10).map(job => fetchOne(job.symbol, job.label)));
+      }
+    };
+
     const connect = () => {
-      if (disposed) return;
+      if (disposed || !symbols.length) return;
       setFeedStatus('connecting');
-      const streams = cryptoPairs.flatMap(pair => {
-        const symbol = pair.symbol.split(':')[1].toLowerCase();
-        return [symbol + '@ticker', symbol + '@kline_15m'];
+      const streams = symbols.flatMap(symbol => {
+        const lower = symbol.toLowerCase();
+        return [lower + '@ticker', ...tfs.map(label => lower + '@kline_' + binanceInterval[label])];
       }).join('/');
       try {
         socket = new WebSocket('wss://data-stream.binance.vision/stream?streams=' + streams);
       } catch (error) {
-        console.warn('Could not open Binance market-data socket', error);
         setFeedStatus('error');
         reconnectTimer = window.setTimeout(connect, 5000);
         return;
@@ -409,19 +361,28 @@ function App() {
           if (data.e === '24hrTicker' && data.s) {
             const price = Number(data.c);
             const percent = Number(data.P);
-            updateCrypto(data.s, { price: displayMarketPrice(price), change: (percent >= 0 ? '+' : '') + percent.toFixed(2) + '%', positive: percent >= 0, updated: 'Binance · live' });
+            setPairs(previous => previous.map(p => p.symbol === 'BINANCE:' + data.s
+              ? { ...p, price: displayMarketPrice(price), change: (percent >= 0 ? '+' : '') + percent.toFixed(2) + '%', positive: percent >= 0 }
+              : p));
+            return;
           }
-          if (data.e === 'kline' && data.s && data.k && data.k.x) {
-            const symbol = data.s;
-            const closes = candleHistory[symbol] ?? [];
-            const close = Number(data.k.c);
-            if (Number.isFinite(close) && closes[closes.length - 1] !== close) closes.push(close);
-            if (closes.length > 200) closes.splice(0, closes.length - 200);
-            candleHistory[symbol] = closes;
-            if (closes.length >= 51) {
-              setMomentumSeries(previous => ({ ...previous, [symbol]: calculateRsiSeries(closes, rsiPeriod) }));
-              updateCrypto(symbol, { rsi: calculateRsi(closes, rsiPeriod), fast: calculateEma(closes, fastLen), slow: calculateEma(closes, slowLen), timeframe: '15m', updated: 'Binance · candle closed', live: true });
+          if (data.e === 'kline' && data.k && data.k.x) {
+            const label = tfs.find(l => binanceInterval[l] === data.k.i);
+            if (!label) return;
+            const key = data.s + '|' + label;
+            const closes = closesRef.current[key];
+            if (!closes || lastCloseRef.current[key] === data.k.T) return;
+            lastCloseRef.current[key] = data.k.T;
+            closes.push(Number(data.k.c));
+            if (closes.length > 300) closes.splice(0, closes.length - 300);
+            if (label === '15m') {
+              const list = candlesRef.current[data.s];
+              if (list && (!list.length || list[list.length - 1].t < Number(data.k.t))) {
+                list.push({ t: Number(data.k.t), h: Number(data.k.h), l: Number(data.k.l), c: Number(data.k.c) });
+                if (list.length > 400) list.splice(0, list.length - 400);
+              }
             }
+            recompute(data.s, label === '15m' ? Number(data.k.T) : undefined);
           }
         } catch (error) {
           console.warn('Could not parse Binance market-data update', error);
@@ -434,102 +395,20 @@ function App() {
         reconnectTimer = window.setTimeout(connect, 5000);
       };
     };
-    void loadHistory();
+
+    void loadMissing();
     connect();
     return () => {
       disposed = true;
       if (reconnectTimer !== undefined) window.clearTimeout(reconnectTimer);
       if (socket) { socket.onclose = null; socket.close(); }
     };
-  }, [rsiPeriod, fastLen, slowLen, refreshKey]);
+  }, [cryptoKey, refreshKey, recompute]);
+
   useEffect(() => {
-    let disposed = false;
-    let socket: WebSocket | null = null;
-    let reconnectTimer: number | undefined;
-    const history: Record<string, number[]> = {};
-    const lastCloseTime: Record<string, number> = {};
-    const symbols = seedPairs.filter(p => p.category === 'Crypto').map(p => p.symbol.split(':')[1]);
-    const apply = (symbol: string, label: string, liveClose = false) => {
-      if (disposed) return;
-      const key = symbol + '|' + label;
-      const row = analyze(history[key] ?? [], rsiPeriod, fastLen, slowLen);
-      if (!row) return;
-      const cross: 'BUY' | 'SELL' | undefined = liveClose && label === '15m'
-        ? row.prevFast <= row.prevSlow && row.fast > row.slow
-          ? 'BUY'
-          : row.prevFast >= row.prevSlow && row.fast < row.slow
-            ? 'SELL'
-            : undefined
-        : undefined;
-      setPairs(previous => previous.map(p => {
-        if (p.symbol !== 'BINANCE:' + symbol) return p;
-        const tf = { ...(p.tf ?? {}), [label]: row };
-        const ready = tfs.every(tfLabel => tf[tfLabel] !== undefined);
-        return {
-          ...p,
-          tf,
-          live: ready,
-          ...(label === '15m' ? { rsi: row.rsi, fast: row.fast, slow: row.slow } : {}),
-          ...(cross ? { liveCross: cross, liveCrossAt: lastCloseTime[key] } : {})
-        };
-      }));
-    };
-    const load = async () => {
-      await Promise.all(symbols.flatMap(symbol => tfs.map(async label => {
-        const key = symbol + '|' + label;
-        try {
-          const response = await fetch('https://data-api.binance.vision/api/v3/klines?symbol=' + symbol + '&interval=' + binanceInterval[label] + '&limit=200');
-          if (!response.ok) throw new Error('Binance candles HTTP ' + response.status);
-          const rows: unknown[][] = await response.json();
-          const closed = rows.filter(row => Number(row[6]) < Date.now());
-          history[key] = closed.map(row => Number(row[4])).filter(Number.isFinite);
-          lastCloseTime[key] = Number(closed[closed.length - 1]?.[6] ?? 0);
-          apply(symbol, label, false);
-        } catch (error) {
-          console.warn('Binance ' + label + ' history unavailable for ' + symbol, error);
-        }
-      })));
-    };
-    const connect = () => {
-      if (disposed) return;
-      const streams = symbols.flatMap(s => tfs.map(label => s.toLowerCase() + '@kline_' + binanceInterval[label])).join('/');
-      try {
-        socket = new WebSocket('wss://data-stream.binance.vision/stream?streams=' + streams);
-      } catch (error) {
-        console.warn('Could not open multi-timeframe socket', error);
-        reconnectTimer = window.setTimeout(connect, 5000);
-        return;
-      }
-      socket.onmessage = event => {
-        try {
-          const packet = JSON.parse(String(event.data));
-          const data = packet.data ?? packet;
-          if (data.e !== 'kline' || !data.k || !data.k.x) return;
-          const label = tfs.find(l => binanceInterval[l] === data.k.i);
-          if (!label) return;
-          const key = data.s + '|' + label;
-          if (!history[key] || lastCloseTime[key] === data.k.T) return;
-          lastCloseTime[key] = data.k.T;
-          history[key].push(Number(data.k.c));
-          if (history[key].length > 300) history[key].splice(0, history[key].length - 300);
-          apply(data.s, label, true);
-        } catch (error) {
-          console.warn('Could not parse multi-timeframe update', error);
-        }
-      };
-      socket.onclose = () => {
-        if (disposed) return;
-        reconnectTimer = window.setTimeout(connect, 5000);
-      };
-    };
-    void load();
-    connect();
-    return () => {
-      disposed = true;
-      if (reconnectTimer !== undefined) window.clearTimeout(reconnectTimer);
-      if (socket) { socket.onclose = null; socket.close(); }
-    };
-  }, [rsiPeriod, fastLen, slowLen, refreshKey]);
+    cryptoKey.split(',').filter(Boolean).forEach(symbol => recompute(symbol));
+  }, [rsiPeriod, fastLen, slowLen, cryptoKey, recompute]);
+
   const [roadmap, setRoadmap] = useState<Record<string, RoadmapState>>(() => {
     try {
       const raw = localStorage.getItem('bpqt-roadmap-v1');
@@ -556,20 +435,14 @@ function App() {
           s.armedAt = Date.now();
           s.confirmed = undefined;
         }
-        if (e.d1Rsi !== undefined && e.d1Rsi <= 70) {
-          // Release the one-shot lock for a future SELL setup, but preserve an already-armed setup in memory.
-          s.sellLocked = false;
-        }
+        if (e.d1Rsi !== undefined && e.d1Rsi <= 70) s.sellLocked = false;
         if (e.buyArm && !s.buyArmed && !s.buyLocked) {
           s.buyArmed = true;
           s.sellArmed = false;
           s.armedAt = Date.now();
           s.confirmed = undefined;
         }
-        if (e.d1Rsi !== undefined && e.d1Rsi >= 30) {
-          // Release the one-shot lock for a future BUY setup, but preserve an already-armed setup in memory.
-          s.buyLocked = false;
-        }
+        if (e.d1Rsi !== undefined && e.d1Rsi >= 30) s.buyLocked = false;
         const freshCross = p.liveCrossAt !== undefined && s.armedAt !== undefined && p.liveCrossAt > s.armedAt;
         if (s.sellArmed && e.sellConfirm && p.liveCross === 'SELL' && freshCross) {
           s.sellArmed = false;
@@ -594,82 +467,9 @@ function App() {
   useEffect(() => {
     try {
       localStorage.setItem('bpqt-roadmap-v1', JSON.stringify({ savedAt: Date.now(), data: roadmap }));
-    } catch {
-      /* storage unavailable */
-    }
+    } catch {}
   }, [roadmap]);
-  const [plans, setPlans] = useState<Record<string, PlanData>>({});
-  useEffect(() => {
-    let disposed = false;
-    let socket: WebSocket | null = null;
-    let reconnectTimer: number | undefined;
-    const symbols = seedPairs.filter(p => p.category === 'Crypto').map(p => p.symbol.split(':')[1]);
-    const store: Record<string, Candle[]> = {};
-    const publish = (symbol: string) => {
-      const candles = store[symbol];
-      if (disposed || !candles || candles.length < 60) return;
-      const crosses = findCrossLevels(candles.map(c => c.c), fastLen, slowLen);
-      const plan: PlanData = { atr: calculateAtr(candles, 14), ...crosses };
-      setPlans(previous => ({ ...previous, ['BINANCE:' + symbol]: plan }));
-    };
-    const load = async () => {
-      await Promise.all(symbols.map(async symbol => {
-        try {
-          const response = await fetch('https://data-api.binance.vision/api/v3/klines?symbol=' + symbol + '&interval=15m&limit=300');
-          if (!response.ok) throw new Error('Binance candles HTTP ' + response.status);
-          const rows: unknown[][] = await response.json();
-          store[symbol] = rows
-            .filter(row => Number(row[6]) < Date.now())
-            .map(row => ({ t: Number(row[0]), h: Number(row[2]), l: Number(row[3]), c: Number(row[4]) }))
-            .filter(c => Number.isFinite(c.h) && Number.isFinite(c.l) && Number.isFinite(c.c));
-          publish(symbol);
-        } catch (error) {
-          console.warn('Trade-plan candles unavailable for ' + symbol, error);
-        }
-      }));
-    };
-    const connect = () => {
-      if (disposed) return;
-      const streams = symbols.map(s => s.toLowerCase() + '@kline_15m').join('/');
-      try {
-        socket = new WebSocket('wss://data-stream.binance.vision/stream?streams=' + streams);
-      } catch (error) {
-        console.warn('Could not open trade-plan socket', error);
-        reconnectTimer = window.setTimeout(connect, 5000);
-        return;
-      }
-      socket.onmessage = event => {
-        try {
-          const packet = JSON.parse(String(event.data));
-          const data = packet.data ?? packet;
-          if (data.e !== 'kline' || !data.k || !data.k.x) return;
-          const list = store[data.s];
-          if (!list) return;
-          const candle: Candle = { t: Number(data.k.t), h: Number(data.k.h), l: Number(data.k.l), c: Number(data.k.c) };
-          if (list.length && list[list.length - 1].t >= candle.t) return;
-          list.push(candle);
-          if (list.length > 400) list.splice(0, list.length - 400);
-          publish(data.s);
-        } catch (error) {
-          console.warn('Could not parse trade-plan update', error);
-        }
-      };
-      socket.onclose = () => {
-        if (disposed) return;
-        reconnectTimer = window.setTimeout(connect, 5000);
-      };
-    };
-    void load();
-    connect();
-    return () => {
-      disposed = true;
-      if (reconnectTimer !== undefined) window.clearTimeout(reconnectTimer);
-      if (socket) {
-        socket.onclose = null;
-        socket.close();
-      }
-    };
-  }, [fastLen, slowLen, refreshKey]);
+
   const shortName = (p: Pair) => p.symbol.split(':')[1].replace('USDT', '');
   const getPairSignal = (p: Pair): Side => p.category === 'Crypto' ? roadmap[p.symbol]?.confirmed?.side ?? 'WAIT' : 'WAIT';
   const rmRows = metricPairs.map(p => ({ p, e: evalRoadmap(p, midline), s: roadmap[p.symbol] }));
@@ -683,27 +483,16 @@ function App() {
   const buyStep1 = rmReady === 0 ? ['wait', 'LOADING FEED'] : buyArmedRows.length ? ['ok', 'ARMED · ' + rmNames(buyArmedRows)] : ['wait', 'NOT ARMED'];
   const sellStep2 = sellDoneRows.length ? ['ok', 'CONFIRMED · ' + rmNames(sellDoneRows)] : sellArmedRows.length ? ['wait', 'WAITING FOR 15m CROSS'] : ['wait', 'WAITING FOR SETUP'];
   const buyStep2 = buyDoneRows.length ? ['ok', 'CONFIRMED · ' + rmNames(buyDoneRows)] : buyArmedRows.length ? ['wait', 'WAITING FOR 15m CROSS'] : ['wait', 'WAITING FOR SETUP'];
+
   const visiblePairs = useMemo(
-    () =>
-      pairs.filter(
-        p =>
-          (filter === 'All markets' || p.category === filter) &&
-          (p.name.toLowerCase().includes(query.toLowerCase()) ||
-            p.symbol.toLowerCase().includes(query.toLowerCase()))
-      ),
-    [pairs, filter, query, midline]
+    () => pairs.filter(p => (filter === 'All markets' || p.category === filter) && (p.name.toLowerCase().includes(query.toLowerCase()) || p.symbol.toLowerCase().includes(query.toLowerCase()))),
+    [pairs, filter, query]
   );
   const signalCounts = useMemo(
-    () =>
-      metricPairs.reduce(
-        (a, p) => {
-          a[getSignal(p, midline)]++;
-          return a;
-        },
-        { BUY: 0, SELL: 0, WAIT: 0 }
-      ),
-    [metricPairs, midline]
+    () => metricPairs.reduce((a, p) => { a[getSignal(p, midline)]++; return a; }, { BUY: 0, SELL: 0, WAIT: 0 }),
+    [pairs, midline]
   );
+
   useEffect(() => {
     const old = document.getElementById('tv-widget-script');
     if (old) old.remove();
@@ -721,13 +510,11 @@ function App() {
     root.appendChild(widget);
     const credit = document.createElement('div');
     credit.className = 'tv-credit';
-    credit.innerHTML =
-      '<a href="https://www.tradingview.com/" rel="noopener nofollow" target="_blank">Chart by TradingView</a>';
+    credit.innerHTML = '<a href="https://www.tradingview.com/" rel="noopener nofollow" target="_blank">Chart by TradingView</a>';
     root.appendChild(credit);
     const script = document.createElement('script');
     script.id = 'tv-widget-script';
-    script.src =
-      'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
+    script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
     script.async = true;
     script.innerHTML = JSON.stringify({
       autosize: true,
@@ -757,56 +544,169 @@ function App() {
       container.innerHTML = '';
     };
   }, [selected, timeframe, chartTheme, chartTimezone]);
+
   const selectPair = (symbol: string) => {
     setSelected(symbol);
     setNotice('Chart changed to ' + symbol.replace(':', ' · '));
   };
+
+  const addToScanner = (symbol: string) => {
+    const fullSymbol = 'BINANCE:' + symbol;
+    if (pairs.find(p => p.symbol === fullSymbol)) {
+      setNotice(symbol + ' is already in your scanner.');
+      return;
+    }
+    if (metricPairs.length >= MAX_CRYPTO_PAIRS) {
+      setNotice('Scanner is limited to ' + MAX_CRYPTO_PAIRS + ' crypto pairs.');
+      return;
+    }
+    const newPair: Pair = {
+      symbol: fullSymbol,
+      name: symbol.replace('USDT', ''),
+      category: 'Crypto',
+      price: '0.00',
+      change: '0.00%',
+      positive: true,
+      rsi: 50,
+      fast: 1,
+      slow: 1,
+      timeframe: '15m',
+      updated: 'Loading...',
+      live: false,
+    };
+    setPairs(prev => [...prev, newPair]);
+    setNotice(symbol + ' added to scanner. Loading data...');
+  };
+
+  const removeFromScanner = (symbol: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (pairs.length === 1) {
+      setNotice('Cannot remove the last pair.');
+      return;
+    }
+    setPairs(prev => prev.filter(p => p.symbol !== symbol));
+    if (selected === symbol) {
+      setSelected(pairs.filter(p => p.symbol !== symbol)[0].symbol);
+    }
+  };
+
+  const makePair = (s: string): Pair => ({
+    symbol: 'BINANCE:' + s, name: s.replace('USDT', ''), category: 'Crypto',
+    price: '0.00', change: '0.00%', positive: true, rsi: 50, fast: 1, slow: 1,
+    timeframe: '15m', updated: 'Loading...', live: false,
+  });
+
+  const applyWatchlist = (source: 'gainers' | 'losers' | 'both') => {
+    const g = liveTopGainers.map(t => t.s as string);
+    const l = liveTopLosers.map(t => t.s as string);
+    const symbols = source === 'gainers' ? g : source === 'losers' ? l : [...g, ...l];
+    
+    if (!symbols.length) {
+      setNotice('Live gainers/losers have not loaded yet. Try again in a few seconds.');
+      return;
+    }
+    
+    const unique = Array.from(new Set(symbols)).slice(0, MAX_CRYPTO_PAIRS);
+    setScanSource(source);
+    
+    setPairs(prev => {
+      const existing = new Map(prev.map(p => [p.symbol, p]));
+      const crypto = unique.map(s => existing.get('BINANCE:' + s) ?? makePair(s));
+      return [...crypto, ...prev.filter(p => p.category !== 'Crypto')];
+    });
+    
+    setSelected('BINANCE:' + unique[0]);
+    setNotice('Scanner now watching ' + unique.length + ' ' + source + '. Loading candles...');
+  };
+
+  const renderMovers = (rows: any[], kind: 'gainers' | 'losers') => (
+    <section className="panel" style={{ marginBottom: '24px' }}>
+      <div className="section-header signal-header">
+        <div>
+          <div className="section-title">Live Top {kind === 'gainers' ? 'Gainers' : 'Losers'} (USDT)</div>
+          <p>Real-time updates from Binance · 24h change · Filtered by &gt; $1M Volume</p>
+        </div>
+        <button className="primary-btn" onClick={() => applyWatchlist(kind)}>
+          <ChartCandlestick size={15} /> Scan these {rows.length || 10}
+        </button>
+      </div>
+      <div className="table-scroll">
+        <table>
+          <thead>
+            <tr><th>#</th><th>SYMBOL</th><th>PRICE</th><th>24H CHANGE</th><th>24H VOLUME</th><th>ACTION</th></tr>
+          </thead>
+          <tbody>
+            {rows.map((t, index) => {
+              const pct = parseFloat(t.P);
+              return (
+                <tr key={t.s}>
+                  <td>{index + 1}</td>
+                  <td>
+                    <div className="instrument-cell">
+                      <span className="coin-icon">{t.s.replace('USDT', '').slice(0, 1)}</span>
+                      <span><strong>{t.s.replace('USDT', '')}</strong><small>/USDT</small></span>
+                    </div>
+                  </td>
+                  <td className="price-cell">{parseFloat(t.c).toLocaleString('en-US', { maximumFractionDigits: 6 })}</td>
+                  <td><span className={pct >= 0 ? 'positive' : 'negative'}>{pct >= 0 ? '+' : ''}{pct.toFixed(2)}%</span></td>
+                  <td>${(parseFloat(t.q) / 1000000).toFixed(2)}M</td>
+                  <td style={{ display: 'flex', gap: '8px' }}>
+                    <button className="chart-link" title="Load in chart" onClick={() => { setSelected('BINANCE:' + t.s); setNotice('Loaded ' + t.s + ' into chart'); }}>
+                      <Crosshair size={15} />
+                    </button>
+                    <button className="chart-link" style={{ color: '#78e0aa' }} title="Add to Signal Scanner" onClick={() => addToScanner(t.s)}>
+                      <span style={{ fontSize: '18px', fontWeight: 'bold', lineHeight: '15px' }}>+</span>
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+            {rows.length === 0 && (
+              <tr><td colSpan={6} style={{ textAlign: 'center', padding: '20px' }}>Connecting to Binance live stream...</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+
   const getTradeSide = (p: Pair): Side => {
     const confirmed = getPairSignal(p);
     return confirmed !== 'WAIT' ? confirmed : getSignal(p, midline);
   };
   const getLevels = (p: Pair) => {
-    const price = Number(p.price.replaceAll(',', ''));
+    const price = Number(p.price.replace(/,/g, ''));
     const plan = plans[p.symbol];
-    const sideNow = getTradeSide(p);
+    const side = getTradeSide(p);
     const atr = plan?.atr ?? 0;
-    const cross = sideNow === 'BUY' ? plan?.buyCross : sideNow === 'SELL' ? plan?.sellCross : undefined;
+    const cross = side === 'BUY' ? plan?.buyCross : side === 'SELL' ? plan?.sellCross : undefined;
     let risk = atr * atrMult;
     let basis = 'atr';
     if (cross !== undefined && atr > 0) {
-      const crossRisk = sideNow === 'BUY' ? price - (cross - atr * atrMult) : cross + atr * atrMult - price;
+      const crossRisk = side === 'BUY' ? price - (cross - atr * atrMult) : cross + atr * atrMult - price;
       if (crossRisk > 0) {
         risk = crossRisk;
         basis = 'cross';
       }
     }
     risk = Math.max(risk, 0.0000001);
-    const side = getTradeSide(p);
     const entry = price;
-    const stop =
-      side === 'BUY' ? entry - risk : entry + risk;
-    const target = (r: number) =>
-      side === 'BUY' ? entry + risk * r : entry - risk * r;
+    const stop = side === 'BUY' ? entry - risk : entry + risk;
+    const target = (r: number) => side === 'BUY' ? entry + risk * r : entry - risk * r;
     return {
       entry,
       stop,
       tp1: target(tp1),
+      tp2: target(tp2),
+      tp3: target(tp3),
       basis,
       atr,
       hasSignal: side !== 'WAIT',
-      tp2: target(tp2),
-      tp3: target(tp3),
+      source: getPairSignal(p) !== 'WAIT' ? 'roadmap' : 'grid',
     };
   };
-  const formatPrice = (n: number) =>
-    n.toLocaleString('en-US', {
-      maximumFractionDigits:
-        active.category === 'Forex' && active.name.includes('JPY')
-          ? 3
-          : active.price.includes('.') && active.price.split('.')[1]?.length > 3
-            ? 5
-            : 2,
-    });
+  const formatPrice = (n: number) => displayMarketPrice(n);
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -826,11 +726,7 @@ function App() {
           </button>
           <button
             className="nav-item"
-            onClick={() =>
-              document
-                .getElementById('signal-grid')
-                ?.scrollIntoView({ behavior: 'smooth' })
-            }
+            onClick={() => document.getElementById('signal-grid')?.scrollIntoView({ behavior: 'smooth' })}
           >
             <ChartCandlestick size={18} /> Signal scanner{' '}
             <span className="nav-count">{pairs.length}</span>
@@ -842,33 +738,33 @@ function App() {
         <div className="side-divider" />
         <div className="workspace-label">MARKET WATCH</div>
         <div className="watch-group">
-          CRYPTO <span>06</span>
+          CRYPTO <span>{metricPairs.length.toString().padStart(2, '0')}</span>
         </div>
-        {pairs
-          .filter(p => p.category === 'Crypto')
-          .slice(0, 6)
-          .map(p => (
+        {metricPairs.slice(0, 10).map(p => (
+          <div key={p.symbol} style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
             <button
-              key={p.symbol}
               className={'watch-row ' + (selected === p.symbol ? 'chosen' : '')}
               onClick={() => selectPair(p.symbol)}
+              style={{ flexGrow: 1 }}
             >
               <span className="coin-icon">
-                {p.name === 'Bitcoin'
-                  ? '₿'
-                  : p.name === 'Ethereum'
-                    ? '◆'
-                    : p.name.slice(0, 1)}
+                {p.name === 'Bitcoin' ? '₿' : p.name === 'Ethereum' ? '◆' : p.name.slice(0, 1)}
               </span>
               <span className="watch-name">
                 {p.name}
                 <small>{p.symbol.split(':')[1]}</small>
               </span>
-              <span className={p.positive ? 'positive' : 'negative'}>
-                {p.change}
-              </span>
+              <span className={p.positive ? 'positive' : 'negative'}>{p.change}</span>
             </button>
-          ))}
+            <button 
+              onClick={(e) => removeFromScanner(p.symbol, e)} 
+              style={{ background: 'none', border: 'none', color: '#ff7887', cursor: 'pointer', padding: '8px', opacity: 0.6 }}
+              title="Remove from scanner"
+            >
+              <Trash2 size={14} />
+            </button>
+          </div>
+        ))}
         <div className="side-divider" />
         <div className="sidebar-bottom">
           <div className={'status-dot ' + (feedStatus === 'live' ? 'feed-live-dot' : '')} /> <span>{feedStatus === 'live' ? 'Binance feed connected' : feedStatus === 'reconnecting' ? 'Reconnecting Binance' : feedStatus === 'error' ? 'Binance feed unavailable' : 'Connecting Binance feed'}</span>
@@ -890,17 +786,10 @@ function App() {
               <i /> Market session
             </span>
             <button className="icon-btn website-settings-btn" aria-label="Website settings" title="Website settings" onClick={() => setShowWebsiteSettings(true)}><Settings2 size={18} /></button>
-            <button
-              className="icon-btn"
-              aria-label="Notifications"
-              onClick={() => setNotice('No new notifications.')}
-            >
+            <button className="icon-btn" aria-label="Notifications" onClick={() => setNotice('No new notifications.')}>
               <Bell size={18} />
             </button>
-            <button
-              className="profile"
-              onClick={() => setNotice('BPQT terminal · Local demo workspace')}
-            >
+            <button className="profile" onClick={() => setNotice('BPQT terminal · Local demo workspace')}>
               BP<span>QT</span>
             </button>
           </div>
@@ -915,21 +804,10 @@ function App() {
             <p>Track momentum. Read the structure. Trade with a plan.</p>
           </div>
           <div className="heading-buttons">
-            <button
-              className="secondary-btn"
-              onClick={() => setShowSettings(true)}
-            >
+            <button className="secondary-btn" onClick={() => setShowSettings(true)}>
               <Settings2 size={16} /> Configure strategy
             </button>
-            <button
-              className="primary-btn"
-              onClick={() => {
-                setNotice(
-                  'Reloading 15m candles from Binance…'
-                );
-                setRefreshKey(k => k + 1);
-              }}
-            >
+            <button className="primary-btn" onClick={() => { setNotice('Reloading candles...'); setRefreshKey(k => k + 1); }}>
               <Activity size={16} /> Refresh scanner
             </button>
           </div>
@@ -939,7 +817,7 @@ function App() {
           <CircleHelp size={16} />
           <div className="demo-warning-content">
             <strong>{feedStatus === 'live' ? 'Binance spot feed connected · crypto signals use live candles' : 'Connecting to Binance public market data…'}</strong>
-            {showFeedStatusNote && <span>Bitcoin, Ethereum, Solana, XRP, BNB and Dogecoin update from Binance public price streams. RSI(14), EMA {fastLen} and EMA {slowLen} are calculated from completed 15-minute candles. Forex, gold and indices remain unconnected and are excluded from BUY/SELL/WAIT totals.</span>}
+            {showFeedStatusNote && <span>Crypto pairs update from Binance public price streams. RSI({rsiPeriod}), EMA {fastLen} and EMA {slowLen} are calculated from completed 15-minute candles. Forex, gold and indices are static sample rows with no live feed and are excluded from BUY/SELL/WAIT totals.</span>}
           </div>
           <button className="help-toggle" aria-label="Toggle Binance feed details" aria-expanded={showFeedStatusNote} onClick={() => setShowFeedStatusNote(value => !value)}>?</button>
         </div>
@@ -966,12 +844,9 @@ function App() {
                 <TrendingUp size={18} />
               </div>
             </div>
-            <div className="metric-value green-text">
-              {signalCounts.BUY.toString().padStart(2, '0')}
-            </div>
+            <div className="metric-value green-text">{signalCounts.BUY.toString().padStart(2, '0')}</div>
             <div className="metric-note">
-              <span className="signal-dot buy-dot" /> S1 above S2 · RSI above{' '}
-              {midline}
+              <span className="signal-dot buy-dot" /> S1 above S2 · RSI above {midline}
             </div>
           </div>
           <div className="metric-card">
@@ -981,12 +856,9 @@ function App() {
                 <TrendingDown size={18} />
               </div>
             </div>
-            <div className="metric-value red-text">
-              {signalCounts.SELL.toString().padStart(2, '0')}
-            </div>
+            <div className="metric-value red-text">{signalCounts.SELL.toString().padStart(2, '0')}</div>
             <div className="metric-note">
-              <span className="signal-dot sell-dot" /> S1 below S2 · RSI below{' '}
-              {midline}
+              <span className="signal-dot sell-dot" /> S1 below S2 · RSI below {midline}
             </div>
           </div>
           <div className="metric-card">
@@ -996,147 +868,16 @@ function App() {
                 <Clock3 size={18} />
               </div>
             </div>
-            <div className="metric-value">
-              {signalCounts.WAIT.toString().padStart(2, '0')}
-            </div>
+            <div className="metric-value">{signalCounts.WAIT.toString().padStart(2, '0')}</div>
             <div className="metric-note">
               <span className="note-neutral">Mixed conditions</span> · no signal
             </div>
           </div>
         </section>
-        <section className="chart-section panel">
-          <div className="section-header chart-header">
-            <div>
-              <div className="section-title">
-                Market chart{' '}
-                <span className="live-label">
-                  <i /> TRADINGVIEW
-                </span>
-              </div>
-              <div className="chart-instrument">
-                <span className="coin-icon large">
-                  {active.name === 'Bitcoin' ? '₿' : active.name.slice(0, 1)}
-                </span>
-                <div>
-                  <strong>{active.name}</strong>
-                  <span>{active.symbol.replace(':', ' · ')}</span>
-                </div>
-                <strong className="chart-price">{active.price}</strong>
-                <span className={active.positive ? 'positive' : 'negative'}>
-                  {active.change}
-                </span>
-              </div>
-            </div>
-            <div className="chart-actions">
-              <div className="tf-switch">
-                {tfs.map(tf => (
-                  <button key={tf} className={timeframe === tf ? 'selected' : ''} onClick={() => setTimeframe(tf)}>{tf}</button>
-                ))}
-              </div>
-              <a className="primary-btn tv-editor-link" href="https://www.tradingview.com/chart/" target="_blank" rel="noopener noreferrer"><Code2 size={15} /> Open Pine Editor <ExternalLink size={13} /></a>
-            </div>
-          </div>
-          <div id="tv-chart" className="tv-chart">
-            <div className="chart-loading">Loading TradingView chart…</div>
-          </div>
-        </section>
-        <section className="panel momentum-panel">
-          <div className="section-header signal-header">
-            <div>
-              <div className="section-title">BitPulse Momentum Zone Tracker</div>
-              <p>Live Binance RSI line · selected market · completed 15-minute candles</p>
-            </div>
-            <a className="secondary-btn pine-shortcut" href="https://www.tradingview.com/chart/" target="_blank" rel="noopener noreferrer"><Code2 size={15} /> Add in Pine Editor <ExternalLink size={13} /></a>
-          </div>
-          <div className="momentum-body">
-            <div className={'momentum-chart ' + (activeRsi > midline ? 'momentum-buy' : 'momentum-sell')}>
-              <div className="momentum-zone upper"><span>BUY ZONE · RSI ABOVE {midline}</span></div>
-              <div className="momentum-zone lower"><span>SELL ZONE · RSI BELOW {midline}</span></div>
-              <div className="momentum-line line-70"></div>
-              <div className="momentum-line line-50"></div>
-              <div className="momentum-line line-30"></div>
-              {activeMomentum.length > 1 ? <svg className="momentum-svg" viewBox="0 0 1000 180" preserveAspectRatio="none" role="img" aria-label={'Live RSI line chart for ' + active.name}>
-                <polyline points={momentumPoints} fill="none" stroke={activeRsi > midline ? '#78e0aa' : '#ff7887'} strokeWidth="3" vectorEffect="non-scaling-stroke" />
-                <circle cx="1000" cy={180 - activeRsi * 1.8} r="5" fill={activeRsi > midline ? '#78e0aa' : '#ff7887'} stroke="#07111e" strokeWidth="2" />
-              </svg> : <div className="momentum-loading">Waiting for live Binance RSI candles…</div>}
-              <div className={'momentum-current-label ' + (activeRsi > midline ? 'buy' : 'sell')} style={{ top: Math.max(8, Math.min(188, 220 - activeRsi * 2.2 - 14)) + 'px' }}>{activeZone} · RSI {activeRsi.toFixed(1)}</div>
-              <div className="momentum-axis"><span>100</span><span>70</span><span>50</span><span>30</span><span>0</span></div>
-            </div>
-            <div className="momentum-legend">
-              <span><i className="legend-green"></i> RSI above {midline} · BUY ZONE</span>
-              <span><i className="legend-red"></i> RSI below {midline} · SELL ZONE</span>
-              <span>Market: {active.name} · 15m · RSI({rsiPeriod})</span>
-            </div>
-            <p className="integration-note">This is a live RSI line calculated from Binance completed 15-minute candles for the selected crypto market. It is separate from the embedded TradingView chart; add the Pine indicator in TradingView if you want it inside that chart.</p>
-          </div>
-        </section>
-        <section className="panel roadmap-panel" id="signals">
-          <div className="section-header signal-header">
-            <div>
-              <div className="section-title">BPQT Reversal Roadmap</div>
-              <p>Step 1: D1 RSI above 70 plus all seven MA/RSI rows green arms SELL; D1 RSI below 30 plus all seven rows red arms BUY. The setup is remembered. Step 2: wait for a fresh completed 15m EMA20/50 flip and RSI confirmation.</p>
-            </div>
-            <span className="mini-tag">3R TARGET</span>
-          </div>
-          <div className="roadmap-grid">
-            <article className="roadmap-card sell-roadmap">
-              <div className="roadmap-title"><span className="roadmap-icon">↓</span><div><strong>SELL ENTRY SETUP</strong><small>Daily overbought → 15m confirmation</small></div></div>
-              <div className="roadmap-step"><span>STEP 1</span><div><strong>All 7 timeframes GREEN + D1 RSI(14) above 70 — ARM SELL</strong><p>When D1 RSI first rises above 70, store the SELL setup in memory. It stays ARMED even if D1 RSI later drops back below 70; do not cancel it while waiting for the 15m flip.</p></div><b className={'state-' + sellStep1[0]}>{sellStep1[1]}</b></div>
-              <div className="roadmap-step"><span>STEP 2</span><div><strong>Wait for the 15m SELL flip</strong><p>Only after Step 1 is armed, confirm on a newly completed 15m candle where EMA 20 crosses below EMA 50 and 15m RSI(14) is below 50.</p></div><b className={'state-' + sellStep2[0]}>{sellStep2[1]}</b></div>
-              <div className="roadmap-result"><strong>SELL ENTRY</strong><span>Only after both conditions are verified</span></div>
-            </article>
-            <article className="roadmap-card buy-roadmap">
-              <div className="roadmap-title"><span className="roadmap-icon">↑</span><div><strong>BUY ENTRY SETUP</strong><small>Daily oversold → 15m confirmation</small></div></div>
-              <div className="roadmap-step"><span>STEP 1</span><div><strong>All 7 timeframes RED + D1 RSI(14) below 30 — ARM BUY</strong><p>When D1 RSI first falls below 30, store the BUY setup in memory. It stays ARMED even if D1 RSI later rises back above 30; do not cancel it while waiting for the 15m flip.</p></div><b className={'state-' + buyStep1[0]}>{buyStep1[1]}</b></div>
-              <div className="roadmap-step"><span>STEP 2</span><div><strong>Wait for the 15m BUY flip</strong><p>Only after Step 1 is armed, confirm on a newly completed 15m candle where EMA 20 crosses above EMA 50 and 15m RSI(14) is above 50.</p></div><b className={'state-' + buyStep2[0]}>{buyStep2[1]}</b></div>
-              <div className="roadmap-result"><strong>BUY ENTRY</strong><span>Only after both conditions are verified</span></div>
-            </article>
-          </div>
-          <div className="roadmap-table-wrap">
-            <table className="roadmap-table">
-              <thead>
-                <tr>
-                  <th>PAIR</th>
-                  <th>D1 RSI</th>
-                  {tfs.map(label => <th key={label}>{label}</th>)}
-                  <th>SELL SETUP</th>
-                  <th>BUY SETUP</th>
-                  <th>ENTRY</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rmRows.map(({ p, e, s }) => (
-                  <tr key={p.symbol}>
-                    <td>{shortName(p)}</td>
-                    <td>{e.d1Rsi !== undefined ? e.d1Rsi.toFixed(1) : '…'}</td>
-                    {tfs.map(label => {
-                      const r = p.tf?.[label];
-                      const cls = !r ? '' : r.fast > r.slow && r.rsi > midline ? 'tf-green' : r.fast < r.slow && r.rsi < midline ? 'tf-red' : 'tf-mixed';
-                      return (
-                        <td key={label}>
-                          <span className={'tf-dot ' + cls} title={r ? 'RSI ' + r.rsi.toFixed(1) + ' · S1 ' + (r.fast > r.slow ? '>' : '<') + ' S2' : 'loading'} />
-                        </td>
-                      );
-                    })}
-                    <td className={s?.sellArmed ? 'rm-armed' : ''}>{s?.sellArmed ? 'ARMED' : '—'}</td>
-                    <td className={s?.buyArmed ? 'rm-armed' : ''}>{s?.buyArmed ? 'ARMED' : '—'}</td>
-                    <td className={s?.confirmed ? (s.confirmed.side === 'BUY' ? 'rm-buy' : 'rm-sell') : ''}>{s?.confirmed ? s.confirmed.side + ' · ' + s.confirmed.at : '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="risk-framework">
-            <div><strong>Stop loss</strong><span>Use the existing 15m S1/S2 crossover signal level. Existing chart levels are left unchanged.</span></div>
-            <div><strong>Take profit</strong><span>TP = 3 × entry-to-stop risk (3:1 reward-to-risk).</span></div>
-            <div><strong>RSI validation</strong><span>BUY requires 15m RSI &gt; 50 · SELL requires 15m RSI &lt; 50.</span></div>
-          </div>
-          {!showCryptoGridNote && <button className="help-toggle standalone-help roadmap-help" aria-label="Show crypto grid feed notes" title="Crypto grid feed notes" aria-expanded={false} onClick={() => setShowCryptoGridNote(true)}>?</button>}
-          <div className={'feed-warning' + (showCryptoGridNote ? '' : ' info-hidden')}>
-            <div className="feed-warning-heading"><CircleHelp size={16}/><strong>Crypto grid feed: Binance public data connected separately from TradingView.</strong><button className="help-toggle" aria-label="Toggle crypto grid feed details" aria-expanded={showCryptoGridNote} onClick={() => setShowCryptoGridNote(value => !value)}>?</button></div>
-            {showCryptoGridNote && <p>The signal grid calculates RSI and EMA from completed 15-minute Binance candles for the six crypto pairs. The reversal roadmap reads 1m, 5m, 15m, 30m, 1h, 4h and 1D candles from Binance. Step 1 arms only when D1 RSI is above 70 and all seven MA/RSI rows are green for SELL, or D1 RSI is below 30 and all seven rows are red for BUY. Once armed, the setup stays remembered in this browser even if D1 RSI or timeframe alignment changes, until a fresh completed 15m EMA20/EMA50 cross with the correct RSI confirms it. Crosses that complete while the page is closed are not detected. Forex, metals and indices still need their own data provider.</p>}
-          </div>
-        </section>
+        
+        {renderMovers(liveTopGainers, 'gainers')}
+        {renderMovers(liveTopLosers, 'losers')}
+
         <section className="signal-layout" id="signal-grid">
           <div className="panel signal-panel">
             <div className="section-header signal-header">
@@ -1144,31 +885,21 @@ function App() {
                 <div className="section-title">Multi-market signal grid</div>
                 <p>Live Binance spot prices · RSI and EMA from closed 15m candles · feed: {feedStatus}</p>
               </div>
-              <button
-                className="small-icon-btn"
-                onClick={() => setShowSettings(true)}
-                aria-label="Signal settings"
-              >
+              <button className="small-icon-btn" onClick={() => setShowSettings(true)} aria-label="Signal settings">
                 <SlidersHorizontal size={16} />
               </button>
             </div>
-            <div className="filters">
-              <div className="search-box">
-                <Search size={15} />
-                <input
-                  value={query}
-                  onChange={e => setQuery(e.target.value)}
-                  placeholder="Search instrument..."
-                />
+            
+            <div className="filters" style={{ flexWrap: 'wrap', gap: '8px' }}>
+              <span style={{ fontSize: '12px', opacity: 0.7 }}>SCANNER WATCHLIST</span>
+              <div className="tf-switch">
+                <button className={scanSource === 'gainers' ? 'selected' : ''} onClick={() => applyWatchlist('gainers')}>Top Gainers</button>
+                <button className={scanSource === 'losers' ? 'selected' : ''} onClick={() => applyWatchlist('losers')}>Top Losers</button>
+                <button className={scanSource === 'both' ? 'selected' : ''} onClick={() => applyWatchlist('both')}>Both</button>
               </div>
-              <select value={filter} onChange={e => setFilter(e.target.value)}>
-                <option>All markets</option>
-                <option>Crypto</option>
-                <option>Forex</option>
-                <option>Metals</option>
-                <option>Indices</option>
-              </select>
+              {scanSource === 'manual' && <small>Using default pairs</small>}
             </div>
+
             <div className="table-scroll">
               <table>
                 <thead>
@@ -1186,22 +917,13 @@ function App() {
                 <tbody>
                   {visiblePairs.map(p => {
                     const s = getPairSignal(p);
+                    const isCrypto = p.category === 'Crypto';
                     return (
-                      <tr
-                        key={p.symbol}
-                        className={selected === p.symbol ? 'selected-row' : ''}
-                      >
+                      <tr key={p.symbol} className={selected === p.symbol ? 'selected-row' : ''}>
                         <td>
-                          <button
-                            className="instrument-cell"
-                            onClick={() => selectPair(p.symbol)}
-                          >
+                          <button className="instrument-cell" onClick={() => selectPair(p.symbol)}>
                             <span className="coin-icon">
-                              {p.name === 'Bitcoin'
-                                ? '₿'
-                                : p.name === 'Ethereum'
-                                  ? '◆'
-                                  : p.name.slice(0, 1)}
+                              {p.name === 'Bitcoin' ? '₿' : p.name === 'Ethereum' ? '◆' : p.name.slice(0, 1)}
                             </span>
                             <span>
                               <strong>{p.name}</strong>
@@ -1211,48 +933,24 @@ function App() {
                         </td>
                         <td className="price-cell">
                           {p.price}
-                          <small
-                            className={p.positive ? 'positive' : 'negative'}
-                          >
-                            {p.change}
-                          </small>
+                          {isCrypto
+                            ? <small className={p.positive ? 'positive' : 'negative'}>{p.change}</small>
+                            : <small>sample · not live</small>}
                         </td>
                         <td>
-                          <span
-                            className={
-                              'rsi-pill ' +
-                              (p.rsi > 70
-                                ? 'overbought'
-                                : p.rsi < 30
-                                  ? 'oversold'
-                                  : '')
-                            }
-                          >
-                            {p.rsi.toFixed(1)}
+                          <span className={'rsi-pill ' + (p.rsi > 70 ? 'overbought' : p.rsi < 30 ? 'oversold' : '')}>
+                            {isCrypto && !p.tf?.['15m'] ? '…' : p.rsi.toFixed(1)}
                           </span>
                         </td>
                         <td>
-                          <span
-                            className={
-                              'ma-state ' +
-                              (p.fast > p.slow
-                                ? 'bull-state'
-                                : p.fast < p.slow
-                                  ? 'bear-state'
-                                  : '')
-                            }
-                          >
-                            {p.fast > p.slow
-                              ? 'S1 > S2'
-                              : p.fast < p.slow
-                                ? 'S1 < S2'
-                                : 'Equal'}
+                          <span className={'ma-state ' + (!isCrypto || !p.tf?.['15m'] ? '' : p.fast > p.slow ? 'bull-state' : p.fast < p.slow ? 'bear-state' : '')}>
+                            {!isCrypto ? 'NO FEED' : !p.tf?.['15m'] ? '…' : p.fast > p.slow ? 'S1 > S2' : p.fast < p.slow ? 'S1 < S2' : 'Equal'}
                           </span>
                         </td>
                         <td>
-                          <span className={'signal-badge ' + (p.category !== 'Crypto' || !p.live ? 'wait' : getSignal(p, midline).toLowerCase())} title="S1 EMA vs S2 EMA with RSI above or below the midline, from completed 15m Binance candles">
+                          <span className={'signal-badge ' + (!isCrypto || !p.live ? 'wait' : getSignal(p, midline).toLowerCase())} title="S1 EMA vs S2 EMA with RSI above or below the midline, from completed 15m Binance candles">
                             <i />
-                            {p.category !== 'Crypto' ? 'NO FEED' : p.live ? getSignal(p, midline) : 'LOADING'}
+                            {!isCrypto ? 'NO FEED' : p.live ? getSignal(p, midline) : 'LOADING'}
                           </span>
                         </td>
                         <td>
@@ -1266,17 +964,14 @@ function App() {
                           </div>
                         </td>
                         <td>
-                          <span className={'signal-badge ' + (p.category !== 'Crypto' ? 'wait' : s.toLowerCase())} title={p.category !== 'Crypto' ? 'No Binance feed for this market' : p.live ? (roadmap[p.symbol]?.confirmed ? 'Confirmed by the strict BPQT roadmap' : 'Waiting for all roadmap conditions') : 'Waiting for all seven Binance timeframes'}>
+                          <span className={'signal-badge ' + (!isCrypto ? 'wait' : s.toLowerCase())} title={!isCrypto ? 'No Binance feed for this market' : p.live ? (roadmap[p.symbol]?.confirmed ? 'Confirmed by the strict BPQT roadmap' : 'Waiting for all roadmap conditions') : 'Waiting for all seven Binance timeframes'}>
                             <i />
-                            {p.category !== 'Crypto' ? 'NO FEED' : p.live ? s : 'LOADING'}
+                            {!isCrypto ? 'NO FEED' : p.live ? s : 'LOADING'}
                           </span>
-                          <small className="roadmap-row-status">{roadmap[p.symbol]?.confirmed ? roadmap[p.symbol]?.confirmed?.side + ' confirmed · ' + roadmap[p.symbol]?.confirmed?.at : roadmap[p.symbol]?.sellArmed ? 'SELL armed · waiting for fresh 15m cross' : roadmap[p.symbol]?.buyArmed ? 'BUY armed · waiting for fresh 15m cross' : p.live ? 'No complete setup' : 'Loading 7 timeframes'}</small>
+                          <small className="roadmap-row-status">{roadmap[p.symbol]?.confirmed ? roadmap[p.symbol]?.confirmed?.side + ' confirmed · ' + roadmap[p.symbol]?.confirmed?.at : roadmap[p.symbol]?.sellArmed ? 'SELL armed · waiting for fresh 15m cross' : roadmap[p.symbol]?.buyArmed ? 'BUY armed · waiting for fresh 15m cross' : p.live ? 'No complete setup' : isCrypto ? 'Loading 7 timeframes' : ''}</small>
                         </td>
                         <td>
-                          <button
-                            className="chart-link"
-                            onClick={() => selectPair(p.symbol)}
-                          >
+                          <button className="chart-link" onClick={() => selectPair(p.symbol)}>
                             <Crosshair size={15} />
                           </button>
                         </td>
@@ -1286,14 +981,12 @@ function App() {
                 </tbody>
               </table>
               {visiblePairs.length === 0 && (
-                <div className="empty-state">
-                  No instruments match your search.
-                </div>
+                <div className="empty-state">No instruments match your search.</div>
               )}
             </div>
             <div className="table-footer">
               <span>Showing {visiblePairs.length} of {pairs.length} instruments</span>
-              <span>Binance live: 6 crypto · no feed: forex/metals/indices</span>
+              <span>Binance live: {metricPairs.length} crypto</span>
             </div>
           </div>
           <div className="right-stack">
@@ -1313,67 +1006,36 @@ function App() {
               </div>
               <div className="detail-price">
                 {active.price}
-                <span className={active.positive ? 'positive' : 'negative'}>
-                  {active.change}
-                </span>
+                <span className={active.positive ? 'positive' : 'negative'}>{active.change}</span>
               </div>
-              <div
-                className={
-                  'detail-signal ' + getPairSignal(active).toLowerCase()
-                }
-              >
+              <div className={'detail-signal ' + getSignal(active, midline).toLowerCase()}>
                 <span className="signal-dot" />
                 {getSignal(active, midline)} SIGNAL{' '}
                 <small>
-                  {getSignal(active, midline) === 'WAIT'
-                    ? 'Conditions not aligned'
-                    : 'MA + RSI conditions aligned'}
+                  {getSignal(active, midline) === 'WAIT' ? 'Conditions not aligned' : 'MA + RSI conditions aligned'}
                 </small>
               </div>
               <div className="condition-list">
                 <div>
                   <span>S1 / S2 alignment</span>
-                  <strong
-                    className={
-                      active.fast > active.slow
-                        ? 'positive'
-                        : active.fast < active.slow
-                          ? 'negative'
-                          : ''
-                    }
-                  >
-                    {active.fast > active.slow
-                      ? 'Bullish'
-                      : active.fast < active.slow
-                        ? 'Bearish'
-                        : 'Neutral'}
+                  <strong className={active.fast > active.slow ? 'positive' : active.fast < active.slow ? 'negative' : ''}>
+                    {active.fast > active.slow ? 'Bullish' : active.fast < active.slow ? 'Bearish' : 'Neutral'}
                   </strong>
                 </div>
                 <div>
                   <span>RSI ({rsiPeriod})</span>
                   <strong>
                     {active.rsi.toFixed(1)}{' '}
-                    <small>
-                      {active.rsi > midline
-                        ? 'above'
-                        : active.rsi < midline
-                          ? 'below'
-                          : 'at'}{' '}
-                      {midline}
-                    </small>
+                    <small>{active.rsi > midline ? 'above' : active.rsi < midline ? 'below' : 'at'} {midline}</small>
                   </strong>
                 </div>
                 <div>
                   <span>Signal timeframe</span>
-                  <strong>{timeframe}</strong>
+                  <strong>15m</strong>
                 </div>
                 <div>
                   <span>Signal status</span>
-                  <strong>
-                    {getSignal(active, midline) === 'WAIT'
-                      ? 'Waiting'
-                      : 'Conditions met'}
-                  </strong>
+                  <strong>{getSignal(active, midline) === 'WAIT' ? 'Waiting' : 'Conditions met'}</strong>
                 </div>
               </div>
               <div className="levels-title">
@@ -1384,40 +1046,37 @@ function App() {
                 if (!lv.hasSignal) return <p className="risk-note">No active BUY or SELL signal for {active.name}. Levels appear when the S1/S2 signal or a roadmap entry is active.</p>;
                 if (!lv.atr) return <p className="risk-note">Loading ATR from Binance…</p>;
                 return (
-                  <div className="levels-grid">
-                    <div>
-                      <span>STOP BASIS</span>
-                      <strong>{lv.basis === 'cross' ? 'Cross ± ATR' : 'ATR only'}</strong>
+                  <>
+                    <p className="risk-note">
+                      {lv.source === 'roadmap' ? 'Source: BPQT roadmap entry (both steps confirmed).' : 'Source: basic S1/S2 + RSI signal. Not confirmed by the roadmap.'}
+                    </p>
+                    <div className="levels-grid">
+                      <div>
+                        <span>STOP BASIS</span>
+                        <strong>{lv.basis === 'cross' ? 'Cross ± ATR' : 'ATR only'}</strong>
+                      </div>
+                      <div>
+                        <span>ENTRY</span>
+                        <strong>{formatPrice(lv.entry)}</strong>
+                      </div>
+                      <div>
+                        <span>STOP LOSS</span>
+                        <strong className="red-text">{formatPrice(lv.stop)}</strong>
+                      </div>
+                      <div>
+                        <span>TP1 · {tp1}R</span>
+                        <strong className="green-text">{formatPrice(lv.tp1)}</strong>
+                      </div>
+                      <div>
+                        <span>TP2 · {tp2}R</span>
+                        <strong className="green-text">{formatPrice(lv.tp2)}</strong>
+                      </div>
+                      <div>
+                        <span>TP3 · {tp3}R</span>
+                        <strong className="green-text">{formatPrice(lv.tp3)}</strong>
+                      </div>
                     </div>
-                    <div>
-                      <span>ENTRY</span>
-                      <strong>{formatPrice(lv.entry)}</strong>
-                    </div>
-                    <div>
-                      <span>STOP LOSS</span>
-                      <strong className="red-text">
-                        {formatPrice(lv.stop)}
-                      </strong>
-                    </div>
-                    <div>
-                      <span>TP1 · {tp1}R</span>
-                      <strong className="green-text">
-                        {formatPrice(lv.tp1)}
-                      </strong>
-                    </div>
-                    <div>
-                      <span>TP2 · {tp2}R</span>
-                      <strong className="green-text">
-                        {formatPrice(lv.tp2)}
-                      </strong>
-                    </div>
-                    <div>
-                      <span>TP3 · {tp3}R</span>
-                      <strong className="green-text">
-                        {formatPrice(lv.tp3)}
-                      </strong>
-                    </div>
-                  </div>
+                  </>
                 );
               })()}
               <p className="risk-note">
@@ -1450,15 +1109,10 @@ function App() {
                 <span className="rule-number">03</span>
                 <div>
                   <strong>Risk framework</strong>
-                  <p>
-                    ATR stop distance with {tp1}R / {tp2}R / {tp3}R targets
-                  </p>
+                  <p>ATR stop distance with {tp1}R / {tp2}R / {tp3}R targets</p>
                 </div>
               </div>
-              <button
-                className="text-action"
-                onClick={() => setShowSettings(true)}
-              >
+              <button className="text-action" onClick={() => setShowSettings(true)}>
                 Adjust strategy parameters <span>→</span>
               </button>
             </div>
@@ -1466,13 +1120,10 @@ function App() {
         </section>
         <footer className="footer">
           <span>
-            © 2026 BitPulse Quantitative Trades{' '}
-            <span className="footer-sep">·</span> Built for disciplined market
-            analysis
+            © 2026 BitPulse Quantitative Trades <span className="footer-sep">·</span> Built for disciplined market analysis
           </span>
           <span>
-            <span className="footer-dot" /> Live Binance data{' '}
-            <span className="footer-sep">·</span> Not financial advice
+            <span className="footer-dot" /> Live Binance data <span className="footer-sep">·</span> Not financial advice
           </span>
         </footer>
         {notice && (
@@ -1499,129 +1150,56 @@ function App() {
           </div>
         )}
         {showSettings && (
-          <div
-            className="modal-backdrop"
-            onClick={() => setShowSettings(false)}
-          >
+          <div className="modal-backdrop" onClick={() => setShowSettings(false)}>
             <div className="settings-modal" onClick={e => e.stopPropagation()}>
               <div className="modal-header">
                 <div>
                   <span className="eyebrow">BPQT CONFIGURATION</span>
                   <h2>Strategy settings</h2>
                 </div>
-                <button
-                  className="icon-btn"
-                  onClick={() => setShowSettings(false)}
-                >
+                <button className="icon-btn" onClick={() => setShowSettings(false)} aria-label="Close strategy settings">
                   <X size={18} />
                 </button>
               </div>
               <p className="modal-copy">
-                Adjust the displayed signal model. Changes apply to the demo
-                grid only; this does not alter the supplied Pine Script on
-                TradingView.
+                Adjust the signal model. Changes recalculate the crypto grid, roadmap and trade plan from the stored candles.
               </p>
               <div className="settings-grid">
                 <label>
                   Fast MA (S1)
-                  <input
-                    type="number"
-                    min="1"
-                    value={fastLen}
-                    onChange={e =>
-                      setFastLen(Math.max(1, Number(e.target.value)))
-                    }
-                  />
+                  <input type="number" min="1" value={fastLen} onChange={e => setFastLen(Math.max(1, Number(e.target.value) || 1))} />
                 </label>
                 <label>
                   Slow MA (S2)
-                  <input
-                    type="number"
-                    min="2"
-                    value={slowLen}
-                    onChange={e =>
-                      setSlowLen(Math.max(2, Number(e.target.value)))
-                    }
-                  />
+                  <input type="number" min="2" value={slowLen} onChange={e => setSlowLen(Math.max(2, Number(e.target.value) || 2))} />
                 </label>
                 <label>
                   RSI period
-                  <input
-                    type="number"
-                    min="2"
-                    value={rsiPeriod}
-                    onChange={e =>
-                      setRsiPeriod(Math.max(2, Number(e.target.value)))
-                    }
-                  />
+                  <input type="number" min="2" value={rsiPeriod} onChange={e => setRsiPeriod(Math.max(2, Number(e.target.value) || 2))} />
                 </label>
                 <label>
                   RSI midline
-                  <input
-                    type="number"
-                    min="1"
-                    max="99"
-                    value={midline}
-                    onChange={e =>
-                      setMidline(
-                        Math.min(99, Math.max(1, Number(e.target.value)))
-                      )
-                    }
-                  />
+                  <input type="number" min="1" max="99" value={midline} onChange={e => setMidline(Math.min(99, Math.max(1, Number(e.target.value) || 50)))} />
                 </label>
                 <label>
                   ATR multiplier
-                  <input
-                    type="number"
-                    min="0.1"
-                    step="0.1"
-                    value={atrMult}
-                    onChange={e =>
-                      setAtrMult(Math.max(0.1, Number(e.target.value)))
-                    }
-                  />
+                  <input type="number" min="0.1" step="0.1" value={atrMult} onChange={e => setAtrMult(Math.max(0.1, Number(e.target.value) || 0.1))} />
                 </label>
                 <label>
                   TP1 risk multiple
-                  <input
-                    type="number"
-                    min="0.1"
-                    step="0.1"
-                    value={tp1}
-                    onChange={e =>
-                      setTp1(Math.max(0.1, Number(e.target.value)))
-                    }
-                  />
+                  <input type="number" min="0.1" step="0.1" value={tp1} onChange={e => setTp1(Math.max(0.1, Number(e.target.value) || 0.1))} />
                 </label>
                 <label>
                   TP2 risk multiple
-                  <input
-                    type="number"
-                    min="0.1"
-                    step="0.1"
-                    value={tp2}
-                    onChange={e =>
-                      setTp2(Math.max(0.1, Number(e.target.value)))
-                    }
-                  />
+                  <input type="number" min="0.1" step="0.1" value={tp2} onChange={e => setTp2(Math.max(0.1, Number(e.target.value) || 0.1))} />
                 </label>
                 <label>
                   TP3 risk multiple
-                  <input
-                    type="number"
-                    min="0.1"
-                    step="0.1"
-                    value={tp3}
-                    onChange={e =>
-                      setTp3(Math.max(0.1, Number(e.target.value)))
-                    }
-                  />
+                  <input type="number" min="0.1" step="0.1" value={tp3} onChange={e => setTp3(Math.max(0.1, Number(e.target.value) || 0.1))} />
                 </label>
               </div>
               <div className="settings-note">
-                <CircleHelp size={15} /> MA lengths are configuration
-                placeholders in this demo. Live RSI and MA values need to be
-                calculated from an actual OHLCV feed.
+                <CircleHelp size={15} /> RSI and MA values are calculated from Binance OHLCV candles. Forex, metals and indices are static samples.
               </div>
               <div className="modal-actions">
                 <button
@@ -1643,7 +1221,7 @@ function App() {
                   className="primary-btn"
                   onClick={() => {
                     setShowSettings(false);
-                    setNotice('Demo strategy parameters updated.');
+                    setNotice('Strategy settings applied.');
                   }}
                 >
                   Apply settings
